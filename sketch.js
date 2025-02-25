@@ -57,12 +57,25 @@ function setup() {
     functional = true;
     explosion_frame_count = 0;
     surfaces = [[[C_WIDTH / 2 + 100, C_HEIGHT / 3], [C_WIDTH / 2 + 100, C_HEIGHT / 3 - 100],
-        [C_WIDTH / 2, C_HEIGHT / 3 - 100], [C_WIDTH / 2, C_HEIGHT / 3]], [[500, 500], [600, 600], [700, 500], [600, 400], [500, 500]]];
-    landing_surfaces = [[[0, soil_altitude], [C_WIDTH, soil_altitude]], [[C_WIDTH / 2, C_HEIGHT / 3], [C_WIDTH / 2 + 100, C_HEIGHT / 3]]];
-    payload_x = ship_x;
-    payload_y = ship_y - 50;
+        [C_WIDTH / 2, C_HEIGHT / 3 - 100], [C_WIDTH / 2, C_HEIGHT / 3]], [[500, 500], [600, 600], [700, 500], [600, 400], [500, 500]],
+        [[C_WIDTH + 500, soil_altitude], [C_WIDTH + 500, -soil_altitude], [-500, -soil_altitude], [-500, soil_altitude]]];
+    landing_surfaces = [[[-500, soil_altitude], [C_WIDTH + 500, soil_altitude]], [[C_WIDTH / 2, C_HEIGHT / 3], [C_WIDTH / 2 + 100, C_HEIGHT / 3]]];
+    payload_x = ship_x - 50;
+    payload_y = ship_y + 50;
     payload_y_speed = 0;
+    p_angle = 0;
+    g_p_speed = 0;
+    g_p_speed_i = 0;
     camera_x_translation = 0;
+    camera_y_translation = 0;
+    stars_drawn = false;
+    pg = createGraphics(2 * C_WIDTH, 2 * C_HEIGHT);
+    pg.background(0);
+    for (i = 0; i < 400; i++) {
+        pg.stroke(255);
+        pg.fill(255);
+        pg.circle(Math.random() * 2 * C_WIDTH, Math.random() * 2 * C_HEIGHT, 1);
+    }
 }
 
 function draw() {
@@ -70,12 +83,45 @@ function draw() {
     translate(-C_WIDTH / 2, C_HEIGHT / 2);
     scale(1, -1);
     camera_translation();
+    translate(0, 0, -1);
+    //image(pg, - C_WIDTH, - C_HEIGHT);
+    translate(0, 0, 1);
+    if (!stars_drawn) {
+
+        stars_drawn = true;
+    }
     if (!functional && explosion_frame_count < 30 && explosion_frame_count % 3 === 0) {
         // translate(Math.round((2 * Math.random() - 1) * (20 -  2 * explosion_frame_count / 3)), Math.round((2 * Math.random() - 1) * (20 - 2 * explosion_frame_count / 3)));
     }
     fill(155);
-    rect(-500, soil_altitude, C_WIDTH + 500, -2 * soil_altitude); // currently includes padding for the shaking effect.
-    //fill(0);
+    rect(-500, soil_altitude, C_WIDTH + 1000, -2 * soil_altitude); // currently includes padding for the shaking effect.
+    fill(0);
+
+    if (!landed) {
+        y_speed -= g;
+    }
+    ship_y += y_speed;
+    ship_x += x_speed;
+    console.log("y_speed: " + y_speed);
+    if (keyIsDown(LEFT_ARROW) && !landed) {
+        dir += PI / 128;
+        if (dir - dir_default >= 2 * PI) {
+            dir -= 2 * PI;
+        }
+    }
+    else if (keyIsDown(RIGHT_ARROW) && !landed) {
+        dir -= PI / 128;
+        if (dir - dir_default <= -2 * PI) {
+            dir += 2 * PI;
+        }
+    }
+    if (keyIsDown(32) && functional) {
+        y_speed += Math.sin(dir) / 5;
+        x_speed += Math.cos(dir) / 5;
+        if (landed) {
+            landed = false;
+        }
+    }
     if (functional) {
         fill(220);
         translate(ship_x, ship_y);
@@ -99,30 +145,6 @@ function draw() {
         explosion_frame_count++;
 
     }
-    if (!landed) {
-        y_speed -= g;
-    }
-    ship_y += y_speed;
-    ship_x += x_speed;
-    if (keyIsDown(LEFT_ARROW) && !landed) {
-        dir += PI / 128;
-        if (dir - dir_default >= 2 * PI) {
-            dir -= 2 * PI;
-        }
-    }
-    else if (keyIsDown(RIGHT_ARROW) && !landed) {
-        dir -= PI / 128;
-        if (dir - dir_default <= -2 * PI) {
-            dir += 2 * PI;
-        }
-    }
-    if (keyIsDown(32) && functional) {
-        y_speed += Math.sin(dir) / 5;
-        x_speed += Math.cos(dir) / 5;
-        if (landed) {
-            landed = false;
-        }
-    }
     landing_check();
     collisions_check();
     draw_payload();
@@ -135,6 +157,11 @@ function draw() {
     stroke(0);
     fill(255);
     rect(C_WIDTH / 2, C_HEIGHT / 3, 100, -100);
+    push();
+    stroke(255, 0, 0);
+    translate(0, 0, 1);
+    circle(ship_x, ship_y, 10);
+    pop();
     //circle(0, 200, 50);
 }
 
@@ -270,8 +297,50 @@ function draw_payload() {
     payload_x = ship_x + payload_vec.x;
     //payload_y_speed = ship_y + payload_vec.y - payload_y - g;
     payload_y = ship_y + payload_vec.y;
+
     line(ship_x, ship_y, payload_x, payload_y);
     circle(payload_x, payload_y, 20);
     pop();
+    payload_vec.norm();
+    payload_vec_angle = payload_vec.angle();
+    if (cos(payload_vec_angle) > 0) {
+        p_angle = payload_vec_angle - PI / 2;
+        g_p_speed += abs(sin(p_angle)) * 1.5 * g;
+        g_p_speed_i -= abs(sin(p_angle)) * 1.5 * g;
+        payload_x += cos(p_angle) * g_p_speed// - cos(p_angle) * g_p_speed_i;
+        payload_y += sin(p_angle) * g_p_speed// - sin(p_angle) * g_p_speed_i;
+    }
+    else {
+        p_angle = payload_vec_angle + PI / 2;
+        g_p_speed_i += abs(sin(p_angle)) * 1.5 * g;
+        g_p_speed -= abs(sin(p_angle)) * 1.5 * g;
+        payload_x += cos(p_angle) * g_p_speed_i// - cos(p_angle) * g_p_speed;
+        payload_y += sin(p_angle) * g_p_speed_i// - sin(p_angle) * g_p_speed;
+    }
+    g_p_speed *= 0.995;
+    g_p_speed_i *= 0.995;
+    console.log("x: " + payload_x);
+    console.log("y: " + payload_y);
+    console.log("g_p_speed: " + g_p_speed);
+    //console.log(payload_vec_angle);
     //payload_y += payload_y_speed;
+}
+
+function camera_translation() {
+    // if (ship_x + camera_x_translation > 0.8 * C_WIDTH) {
+    //     camera_x_translation = 0.8 * C_WIDTH - ship_x;
+    // }
+    // if (ship_x + camera_x_translation < 0.2 * C_WIDTH) {
+    //     camera_x_translation = 0.2 * C_WIDTH - ship_x;
+    // }
+    // if (ship_y + camera_y_translation > 0.8 * C_HEIGHT) {
+    //     camera_y_translation = 0.8 * C_HEIGHT - ship_y;
+    // }
+    // if (ship_y + camera_y_translation < 0.2 * C_HEIGHT) {
+    //     camera_y_translation = 0.2 * C_HEIGHT - ship_y;
+    // }
+    camera_x_translation = 0.5 * C_WIDTH - ship_x - x_speed;
+    camera_y_translation = 0.5 * C_HEIGHT - ship_y - y_speed;
+    translate(camera_x_translation, camera_y_translation);
+    console.log(ship_x + camera_x_translation);
 }
