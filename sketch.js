@@ -56,17 +56,25 @@ function setup() {
     landed = false;
     functional = true;
     explosion_frame_count = 0;
-    surfaces = [[[C_WIDTH / 2 + 101, C_HEIGHT / 3], [C_WIDTH / 2 + 100, C_HEIGHT / 3 - 100],
-        [C_WIDTH / 2, C_HEIGHT / 3 - 100], [C_WIDTH / 2 + 1, C_HEIGHT / 3]], [[500, 500], [600, 600], [700, 500], [600, 400], [500, 500]]];
+    surfaces = [[[C_WIDTH / 2 + 100, C_HEIGHT / 3], [C_WIDTH / 2 + 100, C_HEIGHT / 3 - 100],
+        [C_WIDTH / 2, C_HEIGHT / 3 - 100], [C_WIDTH / 2, C_HEIGHT / 3]], [[500, 500], [600, 600], [700, 500], [600, 400], [500, 500]]];
     landing_surfaces = [[[0, soil_altitude], [C_WIDTH, soil_altitude]], [[C_WIDTH / 2, C_HEIGHT / 3], [C_WIDTH / 2 + 100, C_HEIGHT / 3]]];
+    payload_x = ship_x;
+    payload_y = ship_y - 50;
+    payload_y_speed = 0;
+    camera_x_translation = 0;
 }
 
 function draw() {
     background(0);
     translate(-C_WIDTH / 2, C_HEIGHT / 2);
     scale(1, -1);
+    camera_translation();
+    if (!functional && explosion_frame_count < 30 && explosion_frame_count % 3 === 0) {
+        // translate(Math.round((2 * Math.random() - 1) * (20 -  2 * explosion_frame_count / 3)), Math.round((2 * Math.random() - 1) * (20 - 2 * explosion_frame_count / 3)));
+    }
     fill(155);
-    rect(0, soil_altitude, C_WIDTH, -soil_altitude);
+    rect(-500, soil_altitude, C_WIDTH + 500, -2 * soil_altitude); // currently includes padding for the shaking effect.
     //fill(0);
     if (functional) {
         fill(220);
@@ -81,6 +89,7 @@ function draw() {
             circle(ax - 51, ay, 10);
             translate(0, 0, 1);
         }
+
         rotate(-dir);
         translate(-ship_x, -ship_y);
     }
@@ -88,6 +97,7 @@ function draw() {
         fill(255, 165, 0);
         circle(ship_x, ship_y, 50);
         explosion_frame_count++;
+
     }
     if (!landed) {
         y_speed -= g;
@@ -115,11 +125,14 @@ function draw() {
     }
     landing_check();
     collisions_check();
+    draw_payload();
+
     stroke(255);
     line(500, 500, 600, 600);
     line(600, 600, 700, 500);
     line(700, 500, 600, 400);
     line(600, 400, 500, 500);
+    stroke(0);
     fill(255);
     rect(C_WIDTH / 2, C_HEIGHT / 3, 100, -100);
     //circle(0, 200, 50);
@@ -156,13 +169,13 @@ function slope_intercept(a_x, a_y, b_x, b_y) {
     //     [a_x, a_y, b_x, b_y] = [b_x, b_y, a_x, a_y];
     // }
     m = (b_y - a_y) / (b_x - a_x);
-    if (isNaN(m)) {
-        m = 999999;
-        //n = a_y;
+    if (b_x - a_x === 0) {
+        m = "vertical";
+        n = m;
     }
-    //else {
-    n = a_y - m * a_x;
-    //}
+    else {
+        n = a_y - m * a_x;
+    }
     // console.log("m = " + m);
     // console.log("n = " + n);
     return {m:m, n:n};
@@ -175,9 +188,20 @@ function segments_intersection(a_x, a_y, b_x, b_y, c_x, c_y, d_x, d_y) {
         return null;
     }
     else {
-        i_x = (s2.n - s1.n) / (s1.m - s2.m);
-        i_y = s1.m * i_x + s1.n;
-        if ((i_x > a_x && i_x > b_x) || (i_x < a_x && i_x < b_x) || (i_x > c_x && i_x > d_x) || (i_x < c_x && i_x < d_x)) {
+        if (s1.m === "vertical") {
+            i_x = a_x;
+            i_y = s2.n + s2.m * a_x;
+        }
+        else if (s2.m === "vertical") {
+            i_x = c_x;
+            i_y = s1.n + s1.m * c_x;
+        }
+        else {
+            i_x = (s2.n - s1.n) / (s1.m - s2.m);
+            i_y = s1.m * i_x + s1.n;
+        }
+        if ((i_x > a_x && i_x > b_x) || (i_x < a_x && i_x < b_x) || (i_x > c_x && i_x > d_x) || (i_x < c_x && i_x < d_x) ||
+            (i_y > a_y && i_y > b_y) || (i_y < a_y && i_y < b_y) || (i_y > c_y && i_y > d_y) || (i_y < c_y && i_y < d_y)) {
             return null;
         }
         else {
@@ -218,10 +242,7 @@ function collisions_check() {
                 y1 = corner1_vec.y;
                 x2 = corner2_vec.x;
                 y2 = corner2_vec.y;
-                stroke(255, 0, 0);
-                translate(0, 0, 1);
-                line(x1, y1, x2, y2);
-                translate(0, 0, -1);
+
                 // console.log("tr 1 = " + x1 + " " + y1);
                 // console.log("tr 2 = " + x2 + " " + y2);
                 if (segments_intersection(x1 + ship_x, y1 + ship_y, x2 + ship_x, y2 + ship_y,
@@ -236,4 +257,21 @@ function collisions_check() {
 
 function v_module(x, y) {
     return sqrt(x * x + y * y);
+}
+
+function draw_payload() {
+    payload_vec = new Vector(payload_x - ship_x, payload_y - ship_y);
+    payload_vec.norm();
+    payload_vec.x *= 50;
+    payload_vec.y *= 50;
+    push();
+    stroke(255);
+    fill(255);
+    payload_x = ship_x + payload_vec.x;
+    //payload_y_speed = ship_y + payload_vec.y - payload_y - g;
+    payload_y = ship_y + payload_vec.y;
+    line(ship_x, ship_y, payload_x, payload_y);
+    circle(payload_x, payload_y, 20);
+    pop();
+    //payload_y += payload_y_speed;
 }
